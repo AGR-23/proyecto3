@@ -101,11 +101,11 @@ public class Train extends Robot implements Runnable, Directions {
     // Move the train from the depot to the initial position
     {
         while (column != 16 || row != 32) {
-            if (column == 15 && row == 35 && !facingEast())
+            if (column == 15 && row == 35 && !facingWest())
                 turnLeft();
             if (column == 1 && row == 35 && !facingSouth())
                 turnLeft();
-            if (column == 1 && row == 34 && !facingWest())
+            if (column == 1 && row == 34 && !facingEast())
                 turnLeft();
             if (column == 14 && row == 34 && !facingSouth())
                 turnRight();
@@ -142,7 +142,7 @@ public class Train extends Robot implements Runnable, Directions {
         if (orderManager.map[row][column] == 1) {
             row = prevRow; // revert to previous row
             column = prevColumn; // revert to previous column
-            System.out.println("collision!");
+            System.out.println("OJOOO");
         } else {
             orderManager.map[prevRow][prevColumn] = 0; // mark the previous cell as unoccupied
             orderManager.map[row][column] = 1; // mark the new cell as occupied
