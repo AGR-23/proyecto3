@@ -1,23 +1,27 @@
 # Nombre de tu JAR y clases
-JAR = KarelJRobot.jar
-SRC = *.java
-MAIN = main
+JAR       := KarelJRobot.jar
+SRC       := $(wildcard *.java)
+CLASSES   := $(SRC:.java=.class)
+MAIN      := main
+
+# Opciones de classpath (unix: “:”, windows: “;”)
+CP        := .:$(JAR)
 
 .PHONY: all compile run clean
 
-# Objetivo por defecto: compila todo
+# Objetivo por defecto
 all: compile
 
-# Compilar todas las .java
-compile:
+# Compila todos los .java
+compile: $(CLASSES)
 
-javac -cp .:$(JAR) $(SRC)
+%.class: %.java
+	javac -cp $(CP) $<
 
-# Ejecutar, compilando antes si hace falta
+# Ejecuta (se asegura de compilar antes)
 run: compile
-	
-java -cp .:$(JAR):. $(MAIN)
+	java -cp $(CP) $(MAIN)
 
-# Borrar las clases compiladas
+# Limpia los .class
 clean:
-<tab>rm -f *.class
+	rm -f $(CLASSES)
