@@ -3,74 +3,113 @@ import java.awt.Color;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.*;
 
 public class Train extends Robot implements Runnable, Directions {
-    public static final CyclicBarrier startBarrier = new CyclicBarrier(3); // Synchronization barrier for starting the
-                                                                           // trains
-    int column;
-    int row;
-    String route;
+
+    // Add a unique ID for each train
+    private static int idCounter = 1;
+    private int id;
+    public int getID() {
+        return id;
+    }
+    public int row;
+    public int column;
+    public String route;
     Order orderManager;
     boolean isInNiquia = false; // Flag to check if the train is in Niquia
     private boolean isInitialTrain; // Indica si es uno de los 3 trenes iniciales
+    private final CyclicBarrier allTrainsAtStationsBarrier; // Nueva barrera
 
-    public Train(int street, int avenue, Direction direction, int beeps, Color color, String route,
-            Order orderManager) {
-        super(street, avenue, direction, beeps, color);
-        this.column = avenue;
-        this.row = street;
+    // Métodos para acceder a la posición actual (añadir getters)
+
+    public String getRoute() {
+        return this.route;
+    }
+
+    public int getRow() {
+        return this.row;
+    }
+
+    public int getColumn() {
+        return this.column;
+    }
+
+    public Train(int street, int avenue, Direction dir, int beeps, Color color,
+            String route, Order orderManager, CyclicBarrier allTrainsBarrier) {
+        super(street, avenue, dir, beeps, color);
         this.route = route;
         this.orderManager = orderManager;
-
+        this.row = street;
+        this.column = avenue;
+        this.allTrainsAtStationsBarrier = allTrainsBarrier; // Guardar la barrera
+        this.id = idCounter++;
         World.setupThread(this);
     }
 
     @Override
     public void run() {
-        exitDepot();
+        exitDepot(); // 1. Salir del taller
+        goToStation(); // 2. Ir a la estación inicial asignada
 
-        // Posicionamiento inicial según ruta
+        // 3. Esperar a que TODOS los trenes lleguen a sus estaciones
+        try {
+            System.out.println("Tren " + getID() + " (" + route + ") en estación (" + row + "," + column
+                    + "). Esperando en barrera global...");
+            allTrainsAtStationsBarrier.await(); // Todos los trenes esperan aquí
+        } catch (InterruptedException e) {
+            System.err.println("Tren " + getID() + " interrumpido mientras esperaba en la barrera.");
+            Thread.currentThread().interrupt(); // Restablecer estado de interrupción
+            World.stop();
+            return;
+        } catch (BrokenBarrierException e) {
+            System.err.println("Barrera rota para el tren " + getID() + ". Posiblemente otro tren falló.");
+            World.stop();
+            return;
+        }
+
+        // 4. Una vez la barrera se libera (todos los 32 trenes han llegado), iniciar
+        // ruta comercial.
+        System.out.println(
+                "Tren " + getID() + " (" + route + ") iniciando ruta comercial desde (" + row + "," + column + ").");
+        startCommercialRoute();
+    }
+
+    private void goToStation() {
         switch (route) {
             case "routeAN":
-                goToAN(); // Posicionarse en Niquía
+                goToAN();
                 break;
             case "routeAE":
-                goToAE(); // Posicionarse en La Estrella
+                goToAE();
                 break;
             case "routeSJ":
-                goToSJ(); // Posicionarse en San Javier
-                break;
-            case "routeSA":
-                goToSJ(); // Posicionarse en San Antonio
+                goToSJ();
                 break;
         }
+        System.out.println("Train " + this + " en posición: " + route);
+    }
 
-        // Esperar a que todos estén posicionados
-        System.out.println("Train at " + route + " is positioned. Waiting for others...");
-        try {
-            Train.startBarrier.await();
-        } catch (InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
-        }
-
-        boolean cierre = false; // Variable para controlar el cierre del tren
-        while (cierre != true) {
-            // Todos empiezan al mismo tiempo su recorrido real
-            System.out.println("Train at " + route + " starting route!");
-
-            // Aquí empieza su recorrido según su lógica normal
-            if (route.equals("routeAN")) {
-                niquiaToLaEstrella();
-                route = "routeAE"; // Cambia la ruta a La Estrella
-            } else if (route.equals("routeAE")) {
-                laEstrellaToNiquia();
-                route = "routeAN"; // Cambia la ruta a Niquía
-            } else if (route.equals("routeSJ")) {
-                SanjavierToSanAntonio();
-                route = "routeSA"; // Cambia la ruta a San Antonio
-            } else if (route.equals("routeSA")) {
-                SanAntonioToSanjavier();
-                route = "routeSJ"; // Cambia la ruta a San Javier
+    private void startCommercialRoute() {
+        System.out.println("INICIANDO RUTA COMERCIAL: " + route);
+        while (true) {
+            switch (route) {
+                case "routeAN":
+                    niquiaToLaEstrella();
+                    route = "routeAE";
+                    break;
+                case "routeAE":
+                    laEstrellaToNiquia();
+                    route = "routeAN";
+                    break;
+                case "routeSJ":
+                    SanjavierToSanAntonio();
+                    route = "routeSA";
+                    break;
+                case "routeSA":
+                    SanAntonioToSanjavier();
+                    route = "routeSJ";
+                    break;
             }
         }
     }
@@ -97,59 +136,122 @@ public class Train extends Robot implements Runnable, Directions {
         }
     }
 
-    public void exitDepot()
-    // Move the train from the depot to the initial position
-    {
+    // Modificaciones en el método exitDepot() y moveAndUpdateCoordinates()
+    private void exitDepot() {
         while (column != 16 || row != 32) {
-            if (column == 15 && row == 35 && !facingWest())
-                turnLeft();
-            if (column == 1 && row == 35 && !facingSouth())
-                turnLeft();
-            if (column == 1 && row == 34 && !facingEast())
-                turnLeft();
-            if (column == 14 && row == 34 && !facingSouth())
-                turnRight();
-            if (column == 14 && row == 32 && !facingEast())
-                turnLeft();
-
-            moveAndUpdateCoordinates();
+            synchronized (orderManager.map) {
+                if (frontIsClear()) {
+                    moveAndUpdateCoordinates();
+                } else {
+                    // Lógica de giro mejorada
+                    if (column == 15 && row == 35 && facingNorth()) {
+                        turnLeft(); // Giro obligatorio al oeste
+                    } else if (column == 1 && row == 35 && facingWest()) {
+                        turnLeft(); // Giro obligatorio al sur
+                    } else if (column == 1 && row == 34 && facingSouth()) {
+                        turnLeft(); // Giro obligatorio al este
+                    } else if (column == 14 && row == 34 && facingEast()) {
+                        turnRight(); // Giro obligatorio al sur
+                    } else if (column == 14 && row == 32 && facingSouth()) {
+                        turnLeft(); // Giro obligatorio al este
+                    } else {
+                        turnRight(); // Giro por defecto
+                    }
+                }
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+            }
         }
-        System.out.println("I'M HERE");
+        System.out.println("Tren " + this + " salió del taller");
     }
 
-    public void moveAndUpdateCoordinates() {
-        // Saving the current coordinates before moving, hello teacher
-        int prevRow = row;
-        int prevColumn = column;
-
-        // Calculate the new coordinates based on the current direction
+    private boolean canMoveSafely() {
+        // Verificar si la próxima celda está libre
+        int nextRow = row, nextCol = column;
         if (facingNorth())
-            row++;
+            nextRow++;
         else if (facingSouth())
-            row--;
+            nextRow--;
         else if (facingEast())
-            column++;
+            nextCol++;
         else if (facingWest())
-            column--;
+            nextCol--;
 
-        // Check if the new coordinates are within bounds
-        if (row < 0 || row >= orderManager.map.length || column < 0 || column >= orderManager.map[0].length) {
-            System.out.println("Invalid move: (" + row + ", " + column + ")");
-            row = prevRow;
-            column = prevColumn;
-            return;
-        }
-        if (orderManager.map[row][column] == 1) {
-            row = prevRow; // revert to previous row
-            column = prevColumn; // revert to previous column
-            System.out.println("OJOOO");
-        } else {
-            orderManager.map[prevRow][prevColumn] = 0; // mark the previous cell as unoccupied
-            orderManager.map[row][column] = 1; // mark the new cell as occupied
-            move(); // move the robot to the new coordinates
-            System.out.println("Moving to: " + row + ", " + column);
+        return orderManager.map[nextRow][nextCol] == 0;
+    }
+
+    private void waitForClearPath() {
+        try {
+            Thread.sleep(500); // Reintentar cada 0.5 segundos
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
+
+    // In Train.java
+    private void moveAndUpdateCoordinates() {
+        // This method is called AFTER frontIsClear() was true for physical walls.
+        // Its main job is to handle map-based collision with other trains and update
+        // state correctly.
+        synchronized (orderManager.map) { // Synchronize on the shared map resource
+            int prevInternalRow = this.row;
+            int prevInternalCol = this.column;
+
+            int nextInternalRow = this.row;
+            int nextInternalCol = this.column;
+
+            if (facingNorth())
+                nextInternalRow++;
+            else if (facingSouth())
+                nextInternalRow--;
+            else if (facingEast())
+                nextInternalCol++;
+            else if (facingWest())
+                nextInternalCol--;
+
+            // Check 1: Are the calculated next internal coordinates within bounds?
+            if (nextInternalRow >= 0 && nextInternalRow < orderManager.map.length &&
+                    nextInternalCol >= 0 && nextInternalCol < orderManager.map[0].length) {
+
+                // Check 2: Is the target cell in the shared map free (not occupied by another
+                // train)?
+                if (orderManager.map[nextInternalRow][nextInternalCol] == 0) {
+
+                    orderManager.map[prevInternalRow][prevInternalCol] = 0; // Vacate old spot in map
+
+                    // Update internal coordinates to the new position
+                    this.row = nextInternalRow;
+                    this.column = nextInternalCol;
+
+                    move(); // Execute the physical move (Karel)
+
+                    // Mark new spot in the map using the now-updated internal coordinates
+                    orderManager.map[this.row][this.column] = 1;
+
+                    System.out.println("Tren " + getID() + " movido a (" + this.row + "," + this.column +
+                            "). Actual Karel pos: (" + getRow() + "," + column + ")");
+                } else {
+                    // Target cell in map is occupied by another train.
+                    // Do NOT move. Do NOT update internal coordinates.
+                    System.out.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
+                            ") - path to internal (" + nextInternalRow + "," + nextInternalCol +
+                            ") blocked by map (another train). Holding position.");
+                    // Consider adding a small Thread.sleep() here if trains are to wait.
+                }
+            } else {
+                // Calculated next internal step is out of bounds. This indicates a flaw in
+                // pathing logic.
+                System.err.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
+                        ") - calculated next step internal (" + nextInternalRow + "," + nextInternalCol +
+                        ") is out of bounds. Pathing logic error. Holding position.");
+                // Do NOT move. Do NOT update internal coordinates.
+            }
+        }
+    }
+
+    // All methods below are now inside the Train class
 
     public void waitStation() {
         if (nextToABeeper()) {
@@ -177,15 +279,7 @@ public class Train extends Robot implements Runnable, Directions {
             moveAndUpdateCoordinates();
         }
         isInNiquia = true; // Set the flag to true when the train reaches Niquia
-        System.out.println("Train ready at " + route + ". Waiting for others...");
 
-        try {
-            Train.startBarrier.await(); // Espera a los otros dos trenes
-        } catch (InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
-        }
-
-        System.out.println("All trains ready! Starting route...");
     }
 
     public void niquiaToLaEstrella() {
@@ -267,15 +361,7 @@ public class Train extends Robot implements Runnable, Directions {
 
             moveAndUpdateCoordinates();
         }
-        System.out.println("Train ready at " + route + ". Waiting for others...");
 
-        try {
-            Train.startBarrier.await(); // Espera a los otros dos trenes
-        } catch (InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
-        }
-
-        System.out.println("All trains ready! Starting route...");
     }
 
     public void laEstrellaToNiquia() {
@@ -352,14 +438,6 @@ public class Train extends Robot implements Runnable, Directions {
             moveAndUpdateCoordinates();
         }
         System.out.println("Train ready at " + route + ". Waiting for others...");
-
-        try {
-            Train.startBarrier.await(); // Espera a los otros dos trenes
-        } catch (InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
-        }
-
-        System.out.println("All trains ready! Starting route...");
     }
 
     public void SanjavierToSanAntonio() {
@@ -400,5 +478,4 @@ public class Train extends Robot implements Runnable, Directions {
             waitStation();
         }
     }
-
 }
