@@ -163,7 +163,7 @@ public class Train extends Robot implements Runnable, Directions {
                         System.out.println(
                                 "Tren " + getID() + " esperando: celda ocupada en (" + nextRow + "," + nextCol + ")");
                         try {
-                            Thread.sleep(10); // Espera más corta para reintentar
+                            Thread.sleep(0); // Espera más corta para reintentar
                         } catch (InterruptedException e) {
                         }
                     }
@@ -357,7 +357,7 @@ public class Train extends Robot implements Runnable, Directions {
 
     private void waitIfBlocked() {
         try {
-            Thread.sleep(5); // Esperar antes de reintentar
+            Thread.sleep(0); // Esperar antes de reintentar
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
