@@ -15,6 +15,7 @@ public class Order implements Directions {
     public int[][] map = new int[36][21];
     private Semaphore batchSemaphore = new Semaphore(1); // Semaforo para controlar lotes
     private CyclicBarrier allTrainsAtStationsBarrier;
+    private int niquiaTrainsActuallyAssigned = 0; // Counter for verification
 
     public Order() {
         int columnPos = 15;
@@ -30,68 +31,79 @@ public class Order implements Directions {
             System.out.println("************************************************************");
         });
 
-        for (int i = 0; i < 32; i++) {
-            Train train;
+        // Step 1: Pre-determine routes and colors for all trains
+        String[] routes = new String[TOTAL_TRAINS];
+        Color[] colors = new Color[TOTAL_TRAINS];
 
-            // ——— Sobrescribir los últimos 3 trenes ———
-            if (i == 29) {
-                // Tren #30 → Ruta San Javier (verde)
-                train = new Train(
-                        rowPos, columnPos, currentDirection,
-                        0, Color.GREEN, "routeSJ",
-                        this, allTrainsAtStationsBarrier);
-                lineBTrains.add(train);
+        // Assign routes/colors for i=29, 30, 31 explicitly
+        colors[31] = Color.BLUE;
+        routes[31] = "routeAN"; // This is the 1st Niquia train counted
+        colors[30] = Color.BLUE;
+        routes[30] = "routeAE";
+        colors[29] = Color.GREEN;
+        routes[29] = "routeSJ";
 
-            } else if (i == 30) {
-                // Tren #31 → Ruta Niquía → Estrella (azul)
-                train = new Train(
-                        rowPos, columnPos, currentDirection,
-                        0, Color.BLUE, "routeAE",
-                        this, allTrainsAtStationsBarrier);
-                lineATrains.add(train);
+        List<Integer> blueTrainCandidateIndices_0_to_28 = new ArrayList<>();
+        int tempLineBCount = 0; // Simulates lineBTrains.size() for decision making for i=0..28
 
-            } else if (i == 31) {
-                // Tren #32 → Ruta Estrella → Niquía (azul)
-                train = new Train(
-                        rowPos, columnPos, currentDirection,
-                        0, Color.BLUE, "routeAN",
-                        this, allTrainsAtStationsBarrier);
-                lineATrains.add(train);
-                niquiaCount++; // si quieres mantener el conteo de AN
-
+        // Determine colors for trains i=0 to 28 and identify blue train candidates
+        for (int i = 0; i < 29; i++) { // Loop for i from 0 to 28
+            if (i < 3) {
+                colors[i] = Color.BLUE; // These are initially blue
+            } else if ((i - 3) % 3 == 0 && tempLineBCount < 10) {
+                colors[i] = Color.GREEN;
+                routes[i] = "routeSJ"; // Green trains go to San Javier
+                tempLineBCount++;
             } else {
-                // ——— Lógica original para los demás trenes ———
-                if (i < 3) {
-                    // Primeros 3 trenes: azul a Niquía
-                    train = new Train(rowPos, columnPos, currentDirection,
-                            0, Color.BLUE, "routeAN",
-                            this, allTrainsAtStationsBarrier);
-                    lineATrains.add(train);
-                    niquiaCount++;
+                colors[i] = Color.BLUE; // Otherwise, it's a blue train
+            }
 
-                } else if ((i - 3) % 3 == 0 && lineBTrains.size() < 10) {
-                    // Cada tercer tren tras los primeros 3: verde (Línea B)
-                    train = new Train(rowPos, columnPos, currentDirection,
-                            0, Color.GREEN, "routeSJ",
-                            this, allTrainsAtStationsBarrier);
-                    lineBTrains.add(train);
+            if (colors[i] == Color.BLUE) {
+                blueTrainCandidateIndices_0_to_28.add(i);
+            }
+        }
 
+        // Step 2: Assign routes for the blue trains in slots i=0 to 28.
+        // We need to assign 5 more "routeAN" (since i=31 is already one).
+        // Prioritize those with larger 'i' values from the candidate list.
+        Collections.sort(blueTrainCandidateIndices_0_to_28, Collections.reverseOrder()); // Sorts indices descending
+
+        int anRoutesToAssign = 5;
+        for (int trainIndex_i : blueTrainCandidateIndices_0_to_28) {
+            if (routes[trainIndex_i] == null) { // Ensure it's not already assigned (e.g. green)
+                if (anRoutesToAssign > 0) {
+                    routes[trainIndex_i] = "routeAN";
+                    anRoutesToAssign--;
                 } else {
-                    // Resto de trenes azules (Línea A), alternando AN / AE
-                    String route = (niquiaCount < 5) ? "routeAN" : "routeAE";
-                    train = new Train(rowPos, columnPos, currentDirection,
-                            0, Color.BLUE, route,
-                            this, allTrainsAtStationsBarrier);
-                    lineATrains.add(train);
-                    if (route.equals("routeAN")) {
-                        niquiaCount++;
-                    }
+                    routes[trainIndex_i] = "routeAE";
                 }
             }
-            creationOrderTrains.add(train);
-            map[rowPos][columnPos] = 1;
+        }
 
-            // Actualizar posición
+        for (int i = 0; i < TOTAL_TRAINS; i++) {
+            // Ensure all blue trains have a route if not set above (should not happen with
+            // this logic)
+            if (colors[i] == Color.BLUE && routes[i] == null) {
+                routes[i] = "routeAE"; // Default for any missed blue trains
+            }
+
+            Train train = new Train(rowPos, columnPos, currentDirection, 0, colors[i],
+                    routes[i], this, allTrainsAtStationsBarrier);
+            creationOrderTrains.add(train);
+
+            // Add to specific line lists and count Niquia trains
+            if (colors[i] == Color.GREEN) {
+                lineBTrains.add(train);
+            } else if (colors[i] == Color.BLUE) {
+                lineATrains.add(train);
+                if (routes[i].equals("routeAN")) {
+                    niquiaTrainsActuallyAssigned++;
+                }
+            }
+
+            map[rowPos][columnPos] = 1; // Mark initial position on map
+
+            // Update position for next train in workshop (as per your original logic)
             if (currentDirection == North)
                 rowPos++;
             else if (currentDirection == South)
@@ -101,7 +113,7 @@ public class Order implements Directions {
             else if (currentDirection == West)
                 columnPos--;
 
-            // Giro en esquinas
+            // Turn logic for workshop placement (as per your original logic)
             if (columnPos == 15 && rowPos == 35)
                 currentDirection = West;
             else if (columnPos == 1 && rowPos == 35)
@@ -112,6 +124,11 @@ public class Order implements Directions {
                 currentDirection = South;
             else if (columnPos == 14 && rowPos == 32)
                 currentDirection = East;
+        }
+
+        System.out.println("Total Niquia (routeAN) trains assigned: " + niquiaTrainsActuallyAssigned);
+        if (niquiaTrainsActuallyAssigned != 6) {
+            System.err.println("WARNING: Expected 6 Niquia trains, but got " + niquiaTrainsActuallyAssigned);
         }
     }
 
@@ -175,122 +192,128 @@ public class Order implements Directions {
             }
 
             // Trenes en niquia -> 6
-            if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 35) {
-                trainProgressedEnough = true;
-            }
+            if (!trainProgressedEnough && t.getRoute().equals("routeAN")) {
+                if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 35) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 34) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 34) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 19 && t.getRow() == 34) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 19 && t.getRow() == 34) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 18 && t.getRow() == 34) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 18 && t.getRow() == 34) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 17 && t.getRow() == 34) {
-                trainProgressedEnough = true;
+                if (!trainProgressedEnough && t.getColumn() == 17 && t.getRow() == 34) {
+                    trainProgressedEnough = true;
+                }
             }
 
             // Trenes en la estrella -> 16
-            if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 2) {
-                trainProgressedEnough = true;
-            }
+            if (!trainProgressedEnough && t.getRoute().equals("routeAE")) {
+                if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 2) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 1) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 1) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 11 && t.getRow() == 2) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 11 && t.getRow() == 2) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 2) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 2) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 3) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 3) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 4) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 4) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 5) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 5) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 5) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 5) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 6) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 6) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 8) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 8) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 9) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 9) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 10) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 10) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 11) {
-                trainProgressedEnough = true;
+                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 11) {
+                    trainProgressedEnough = true;
+                }
             }
 
             // Trenes en san javier -> 10
-            if (!trainProgressedEnough && t.getColumn() == 1 && t.getRow() == 17) {
-                trainProgressedEnough = true;
-            }
+            if (!trainProgressedEnough && t.getRoute().equals("routeSJ")) {
+                if (!trainProgressedEnough && t.getColumn() == 1 && t.getRow() == 17) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 17) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 17) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 16) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 16) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 15) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 3 && t.getRow() == 15) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 3 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 4 && t.getRow() == 15) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 4 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 5 && t.getRow() == 15) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 5 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough && t.getColumn() == 6 && t.getRow() == 15) {
-                trainProgressedEnough = true;
-            }
+                if (!trainProgressedEnough && t.getColumn() == 6 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
+                }
 
-            if (!trainProgressedEnough) {
-                return false;
+                if (!trainProgressedEnough) {
+                    return false;
+                }
             }
         }
 

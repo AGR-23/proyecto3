@@ -287,23 +287,23 @@ public class Train extends Robot implements Runnable, Directions {
     }
 
     public void goToAN() {
-        while (column != 19 || row != 35) // while the train is not in Niquia
+        while (column != 19 && row != 35) // while the train is not in Niquia
         {
             synchronized (orderManager.map) {
-                if (column == 17 && row == 32)
-                    turnLeft();
-                if (column == 17 && row == 34)
-                    turnRight();
-                if (column == 20 && row == 34)
-                    turnLeft();
-                if (column == 20 && row == 35)
-                    turnLeft();
-                moveAndUpdateCoordinates();
+                if (isNextCellFree()) {
+                    if (column == 17 && row == 32)
+                        turnLeft();
+                    if (column == 17 && row == 34)
+                        turnRight();
+                    if (column == 20 && row == 34)
+                        turnLeft();
+                    if (column == 20 && row == 35)
+                        turnLeft();
 
-                if (!frontIsClear() && !isNextCellFree()) {
+                    moveAndUpdateCoordinates();
+                } else {
                     waitIfBlocked();
                 }
-                // Wait if the next cell is not free
             }
         }
     }
