@@ -1,3 +1,4 @@
+
 import kareltherobot.*;
 import java.awt.Color;
 import java.util.concurrent.BrokenBarrierException;
@@ -52,7 +53,7 @@ public class Train extends Robot implements Runnable, Directions {
     @Override
     public void run() {
         exitDepot(); // 1. Salir del taller
-        
+
         goToStation(); // 2. Ir a la estación inicial asignada
 
         // 3. Esperar a que TODOS los trenes lleguen a sus estaciones
@@ -139,7 +140,6 @@ public class Train extends Robot implements Runnable, Directions {
         }
     }
 
-    // Modificaciones en el método exitDepot() y moveAndUpdateCoordinates()
     private void exitDepot() {
         while (column != 16 || row != 32) {
             synchronized (orderManager.map) {
@@ -204,19 +204,7 @@ public class Train extends Robot implements Runnable, Directions {
         return orderManager.map[nextRow][nextCol] == 0;
     }
 
-    private void waitForClearPath() {
-        try {
-            Thread.sleep(50); // Reintentar cada 0.5 segundos
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // In Train.java
     private void moveAndUpdateCoordinates() {
-        // This method is called AFTER frontIsClear() was true for physical walls.
-        // Its main job is to handle map-based collision with other trains and update
-        // state correctly.
         synchronized (orderManager.map) { // Synchronize on the shared map resource
             int prevInternalRow = this.row;
             int prevInternalCol = this.column;
@@ -256,19 +244,15 @@ public class Train extends Robot implements Runnable, Directions {
                             "). Actual Karel pos: (" + getRow() + "," + column + ")");
                 } else {
                     // Target cell in map is occupied by another train.
-                    // Do NOT move. Do NOT update internal coordinates.
                     System.out.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
                             ") - path to internal (" + nextInternalRow + "," + nextInternalCol +
                             ") blocked by map (another train). Holding position.");
-                    // Consider adding a small Thread.sleep() here if trains are to wait.
                 }
             } else {
                 // Calculated next internal step is out of bounds. This indicates a flaw in
-                // pathing logic.
                 System.err.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
                         ") - calculated next step internal (" + nextInternalRow + "," + nextInternalCol +
                         ") is out of bounds. Pathing logic error. Holding position.");
-                // Do NOT move. Do NOT update internal coordinates.
             }
         }
     }
@@ -290,10 +274,6 @@ public class Train extends Robot implements Runnable, Directions {
     public void goToAN() {
         while (column != 19 || row != 35) { // Corrected loop condition
             synchronized (orderManager.map) {
-                // Step 1: Decide and perform turns based on current location and orientation.
-                // It's crucial to check the current facing direction before turning,
-                // to ensure the turn is made only when arriving at the intersection
-                // from the expected direction.
                 if (column == 17 && row == 32 && facingEast()) {
                     turnLeft(); // Now at (32,17) facing North
                 } else if (column == 17 && row == 34 && facingNorth()) {
@@ -303,7 +283,6 @@ public class Train extends Robot implements Runnable, Directions {
                 } else if (column == 20 && row == 35 && facingNorth()) {
                     turnLeft(); // Now at (35,20) facing West
                 }
-                // Add any other necessary turns for the path.
 
                 // Step 2: After any necessary turns, check if the path in the NEW current
                 // direction is clear.

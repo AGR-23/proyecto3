@@ -154,7 +154,7 @@ public class Order implements Directions {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 System.err.println("Interrupción al esperar por batchSemaphore");
-                return; // O manejar de otra forma
+                return; 
             }
 
             List<Train> currentBatch = new ArrayList<>();
@@ -183,10 +183,6 @@ public class Order implements Directions {
                 batchSemaphore.release(); // Libera para el siguiente lote
             }).start();
         }
-
-        // No apagues el executor inmediatamente si los trenes siguen operando.
-        // executor.shutdown(); // Podrías querer apagarlo más tarde, o usar un executor
-        // gestionado externamente.
     }
 
     private boolean allTrainsInStation(List<Train> batch) {
