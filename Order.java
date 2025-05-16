@@ -166,10 +166,136 @@ public class Order implements Directions {
 
     private boolean allTrainsInStation(List<Train> batch) {
         for (Train t : batch) {
-            int[] target = getStationCoordinates(t.getRoute());
-            if (t.getRow() != target[0] || t.getColumn() != target[1])
+            boolean trainProgressedEnough = false;
+
+            // Check if train is at its final designated initial station
+            int[] targetStation = getStationCoordinates(t.getRoute()); // Niquia, La Estrella, or San Javier
+            if (t.getRow() == targetStation[0] && t.getColumn() == targetStation[1]) {
+                trainProgressedEnough = true;
+            }
+
+            // Trenes en niquia -> 6
+            if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 35) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 20 && t.getRow() == 34) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 19 && t.getRow() == 34) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 18 && t.getRow() == 34) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 17 && t.getRow() == 34) {
+                trainProgressedEnough = true;
+            }
+
+            // Trenes en la estrella -> 16
+            if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 2) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 1) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 11 && t.getRow() == 2) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 2) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 3) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 4) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 12 && t.getRow() == 5) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 5) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 6) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 8) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 9) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 10) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 11) {
+                trainProgressedEnough = true;
+            }
+
+            // Trenes en san javier -> 10
+            if (!trainProgressedEnough && t.getColumn() == 1 && t.getRow() == 17) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 17) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 16) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 2 && t.getRow() == 15) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 3 && t.getRow() == 15) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 4 && t.getRow() == 15) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 5 && t.getRow() == 15) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough && t.getColumn() == 6 && t.getRow() == 15) {
+                trainProgressedEnough = true;
+            }
+
+            if (!trainProgressedEnough) {
                 return false;
+            }
         }
+
+        // All trains in this batch have reached either their final station or a
+        // specified intermediate point.
         return true;
     }
 
