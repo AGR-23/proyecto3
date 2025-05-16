@@ -1,7 +1,4 @@
 import kareltherobot.*;
-import java.awt.Color;
-import java.util.ArrayList;
-import java.util.List;
 
 public class main {
     public static void main(String[] args) {
@@ -10,12 +7,7 @@ public class main {
         World.setDelay(5);
 
         Order order = new Order();
-        World.setDelay(5);
-
-        // Iniciar todos los trenes
-       order.startAllTrainsInBatches(3);
-        // order.startAllTrains();
-        // order.startAllTrainsInBatches();
+        // Lanza los trenes en paquetes de 3
+        order.startAllTrainsInBatches(3);
     }
-
 }
