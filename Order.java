@@ -17,80 +17,77 @@ public class Order implements Directions {
     private CyclicBarrier allTrainsAtStationsBarrier;
 
     public Order() {
-    int columnPos = 15;
-    int rowPos    = 34;
-    Direction currentDirection = North;
-    int niquiaCount = 0;
+        int columnPos = 15;
+        int rowPos = 34;
+        Direction currentDirection = North;
+        int niquiaCount = 0;
 
-    this.allTrainsAtStationsBarrier = new CyclicBarrier(TOTAL_TRAINS, () -> {
-        System.out.println("************************************************************");
-        System.out.println("TODOS LOS " + TOTAL_TRAINS +
-                           " TRENES HAN LLEGADO A SUS ESTACIONES INICIALES.");
-        System.out.println("INICIANDO OPERACIÓN COMERCIAL GLOBALMENTE.");
-        System.out.println("************************************************************");
-    });
+        this.allTrainsAtStationsBarrier = new CyclicBarrier(TOTAL_TRAINS, () -> {
+            System.out.println("************************************************************");
+            System.out.println("TODOS LOS " + TOTAL_TRAINS +
+                    " TRENES HAN LLEGADO A SUS ESTACIONES INICIALES.");
+            System.out.println("INICIANDO OPERACIÓN COMERCIAL GLOBALMENTE.");
+            System.out.println("************************************************************");
+        });
 
-    for (int i = 0; i < 32; i++) {
-        Train train;
+        for (int i = 0; i < 32; i++) {
+            Train train;
 
-        // ——— Sobrescribir los últimos 3 trenes ———
-        if (i == 29) {
-            // Tren #30 → Ruta San Javier (verde)
-            train = new Train(
-                rowPos, columnPos, currentDirection,
-                0, Color.GREEN, "routeSJ",
-                this, allTrainsAtStationsBarrier
-            );
-            lineBTrains.add(train);
-
-        } else if (i == 30) {
-            // Tren #31 → Ruta Niquía → Estrella (azul)
-            train = new Train(
-                rowPos, columnPos, currentDirection,
-                0, Color.BLUE, "routeAE",
-                this, allTrainsAtStationsBarrier
-            );
-            lineATrains.add(train);
-
-        } else if (i == 31) {
-            // Tren #32 → Ruta Estrella → Niquía (azul)
-            train = new Train(
-                rowPos, columnPos, currentDirection,
-                0, Color.BLUE, "routeAN",
-                this, allTrainsAtStationsBarrier
-            );
-            lineATrains.add(train);
-            niquiaCount++;  // si quieres mantener el conteo de AN
-
-        } else {
-            // ——— Lógica original para los demás trenes ———
-            if (i < 3) {
-                // Primeros 3 trenes: azul a Niquía
-                train = new Train(rowPos, columnPos, currentDirection,
-                                  0, Color.BLUE, "routeAN",
-                                  this, allTrainsAtStationsBarrier);
-                lineATrains.add(train);
-                niquiaCount++;
-
-            } else if ((i - 3) % 3 == 0 && lineBTrains.size() < 10) {
-                // Cada tercer tren tras los primeros 3: verde (Línea B)
-                train = new Train(rowPos, columnPos, currentDirection,
-                                  0, Color.GREEN, "routeSJ",
-                                  this, allTrainsAtStationsBarrier);
+            // ——— Sobrescribir los últimos 3 trenes ———
+            if (i == 29) {
+                // Tren #30 → Ruta San Javier (verde)
+                train = new Train(
+                        rowPos, columnPos, currentDirection,
+                        0, Color.GREEN, "routeSJ",
+                        this, allTrainsAtStationsBarrier);
                 lineBTrains.add(train);
 
-            } else {
-                // Resto de trenes azules (Línea A), alternando AN / AE
-                String route = (niquiaCount < 5) ? "routeAN" : "routeAE";
-                train = new Train(rowPos, columnPos, currentDirection,
-                                  0, Color.BLUE, route,
-                                  this, allTrainsAtStationsBarrier);
+            } else if (i == 30) {
+                // Tren #31 → Ruta Niquía → Estrella (azul)
+                train = new Train(
+                        rowPos, columnPos, currentDirection,
+                        0, Color.BLUE, "routeAE",
+                        this, allTrainsAtStationsBarrier);
                 lineATrains.add(train);
-                if (route.equals("routeAN")) {
+
+            } else if (i == 31) {
+                // Tren #32 → Ruta Estrella → Niquía (azul)
+                train = new Train(
+                        rowPos, columnPos, currentDirection,
+                        0, Color.BLUE, "routeAN",
+                        this, allTrainsAtStationsBarrier);
+                lineATrains.add(train);
+                niquiaCount++; // si quieres mantener el conteo de AN
+
+            } else {
+                // ——— Lógica original para los demás trenes ———
+                if (i < 3) {
+                    // Primeros 3 trenes: azul a Niquía
+                    train = new Train(rowPos, columnPos, currentDirection,
+                            0, Color.BLUE, "routeAN",
+                            this, allTrainsAtStationsBarrier);
+                    lineATrains.add(train);
                     niquiaCount++;
+
+                } else if ((i - 3) % 3 == 0 && lineBTrains.size() < 10) {
+                    // Cada tercer tren tras los primeros 3: verde (Línea B)
+                    train = new Train(rowPos, columnPos, currentDirection,
+                            0, Color.GREEN, "routeSJ",
+                            this, allTrainsAtStationsBarrier);
+                    lineBTrains.add(train);
+
+                } else {
+                    // Resto de trenes azules (Línea A), alternando AN / AE
+                    String route = (niquiaCount < 5) ? "routeAN" : "routeAE";
+                    train = new Train(rowPos, columnPos, currentDirection,
+                            0, Color.BLUE, route,
+                            this, allTrainsAtStationsBarrier);
+                    lineATrains.add(train);
+                    if (route.equals("routeAN")) {
+                        niquiaCount++;
+                    }
                 }
             }
-        }
             creationOrderTrains.add(train);
             map[rowPos][columnPos] = 1;
 
@@ -188,4 +185,5 @@ public class Order implements Directions {
                 throw new IllegalArgumentException("Ruta inválida");
         }
     }
+
 }

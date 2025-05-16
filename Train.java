@@ -10,9 +10,11 @@ public class Train extends Robot implements Runnable, Directions {
     // Add a unique ID for each train
     private static int idCounter = 1;
     private int id;
+
     public int getID() {
         return id;
     }
+
     public int row;
     public int column;
     public String route;
@@ -141,27 +143,46 @@ public class Train extends Robot implements Runnable, Directions {
         while (column != 16 || row != 32) {
             synchronized (orderManager.map) {
                 if (frontIsClear()) {
-                    moveAndUpdateCoordinates();
-                } else {
-                    // Lógica de giro mejorada
-                    if (column == 15 && row == 35 && facingNorth()) {
-                        turnLeft(); // Giro obligatorio al oeste
-                    } else if (column == 1 && row == 35 && facingWest()) {
-                        turnLeft(); // Giro obligatorio al sur
-                    } else if (column == 1 && row == 34 && facingSouth()) {
-                        turnLeft(); // Giro obligatorio al este
-                    } else if (column == 14 && row == 34 && facingEast()) {
-                        turnRight(); // Giro obligatorio al sur
-                    } else if (column == 14 && row == 32 && facingSouth()) {
-                        turnLeft(); // Giro obligatorio al este
+                    int nextRow = row;
+                    int nextCol = column;
+                    // Calcular la próxima celda basada en la dirección actual
+                    if (facingNorth()) {
+                        nextRow++;
+                    } else if (facingSouth()) {
+                        nextRow--;
+                    } else if (facingEast()) {
+                        nextCol++;
+                    } else if (facingWest()) {
+                        nextCol--;
+                    }
+
+                    // Verificar si la próxima celda está libre en el mapa
+                    if (orderManager.map[nextRow][nextCol] == 0) {
+                        moveAndUpdateCoordinates();
                     } else {
-                        turnRight(); // Giro por defecto
+                        System.out.println(
+                                "Tren " + getID() + " esperando: celda ocupada en (" + nextRow + "," + nextCol + ")");
+                        try {
+                            Thread.sleep(100); // Espera más corta para reintentar
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                } else {
+                    // Lógica de giro para paredes físicas
+                    if (column == 15 && row == 35 && facingNorth()) {
+                        turnLeft();
+                    } else if (column == 1 && row == 35 && facingWest()) {
+                        turnLeft();
+                    } else if (column == 1 && row == 34 && facingSouth()) {
+                        turnLeft();
+                    } else if (column == 14 && row == 34 && facingEast()) {
+                        turnRight();
+                    } else if (column == 14 && row == 32 && facingSouth()) {
+                        turnLeft();
+                    } else {
+                        turnRight();
                     }
                 }
-            }
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
             }
         }
         System.out.println("Tren " + this + " salió del taller");
@@ -268,18 +289,53 @@ public class Train extends Robot implements Runnable, Directions {
     public void goToAN() {
         while (column != 19 || row != 35) // while the train is not in Niquia
         {
-            if (column == 17 && row == 32)
-                turnLeft();
-            if (column == 17 && row == 34)
-                turnRight();
-            if (column == 20 && row == 34)
-                turnLeft();
-            if (column == 20 && row == 35)
-                turnLeft();
-            moveAndUpdateCoordinates();
-        }
-        isInNiquia = true; // Set the flag to true when the train reaches Niquia
+            synchronized (orderManager.map) {
+                if (column == 17 && row == 32)
+                    turnLeft();
+                if (column == 17 && row == 34)
+                    turnRight();
+                if (column == 20 && row == 34)
+                    turnLeft();
+                if (column == 20 && row == 35)
+                    turnLeft();
+                moveAndUpdateCoordinates();
 
+                if (!frontIsClear() && !isNextCellFree()) {
+                    waitIfBlocked();
+                }
+                // Wait if the next cell is not free
+            }
+        }
+    }
+
+    private boolean isNextCellFree() {
+        int nextRow = row;
+        int nextCol = column;
+
+        if (facingNorth())
+            nextRow++;
+        else if (facingSouth())
+            nextRow--;
+        else if (facingEast())
+            nextCol++;
+        else if (facingWest())
+            nextCol--;
+
+        // Verificar que las coordenadas estén dentro del mapa
+        if (nextRow < 0 || nextRow >= orderManager.map.length ||
+                nextCol < 0 || nextCol >= orderManager.map[0].length) {
+            return false; // Fuera de los límites del mapa
+        }
+
+        return orderManager.map[nextRow][nextCol] == 0;
+    }
+
+    private void waitIfBlocked() {
+        try {
+            Thread.sleep(50); // Esperar antes de reintentar
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public void niquiaToLaEstrella() {
@@ -325,41 +381,46 @@ public class Train extends Robot implements Runnable, Directions {
 
     public void goToAE() { // While the train is not in La estrella
         while (column != 11 || row != 1) {
+            synchronized (orderManager.map) {
+                if (isNextCellFree()) {
+                    if (column == 16 && row == 32)
+                        turnRight();
+                    if (column == 16 && row == 29)
+                        turnRight();
+                    if (column == 15 && row == 29)
+                        turnLeft();
+                    if (column == 15 && row == 26)
+                        turnRight();
+                    if (column == 13 && row == 26)
+                        turnLeft();
+                    if (column == 13 && row == 23)
+                        turnRight();
+                    if (column == 11 && row == 23)
+                        turnLeft();
+                    if (column == 11 && row == 18)
+                        turnLeft();
+                    if (column == 16 && row == 18)
+                        turnRight();
+                    if (column == 16 && row == 11)
+                        turnRight();
+                    if (column == 13 && row == 11)
+                        turnLeft();
+                    if (column == 13 && row == 5)
+                        turnRight();
+                    if (column == 12 && row == 5)
+                        turnLeft();
+                    if (column == 12 && row == 2)
+                        turnRight();
+                    if (column == 10 && row == 2)
+                        turnLeft();
+                    if (column == 10 && row == 1)
+                        turnLeft();
 
-            if (column == 16 && row == 32)
-                turnRight();
-            if (column == 16 && row == 29)
-                turnRight();
-            if (column == 15 && row == 29)
-                turnLeft();
-            if (column == 15 && row == 26)
-                turnRight();
-            if (column == 13 && row == 26)
-                turnLeft();
-            if (column == 13 && row == 23)
-                turnRight();
-            if (column == 11 && row == 23)
-                turnLeft();
-            if (column == 11 && row == 18)
-                turnLeft();
-            if (column == 16 && row == 18)
-                turnRight();
-            if (column == 16 && row == 11)
-                turnRight();
-            if (column == 13 && row == 11)
-                turnLeft();
-            if (column == 13 && row == 5)
-                turnRight();
-            if (column == 12 && row == 5)
-                turnLeft();
-            if (column == 12 && row == 2)
-                turnRight();
-            if (column == 10 && row == 2)
-                turnLeft();
-            if (column == 10 && row == 1)
-                turnLeft();
-
-            moveAndUpdateCoordinates();
+                    moveAndUpdateCoordinates();
+                } else {
+                    waitIfBlocked();
+                }
+            }
         }
 
     }
@@ -409,35 +470,40 @@ public class Train extends Robot implements Runnable, Directions {
     public void goToSJ() // While the train is not in San Javier
     {
         while (column != 1 || row != 16) {
-            if (column == 16 && row == 32)
-                turnRight();
-            if (column == 16 && row == 29)
-                turnRight();
-            if (column == 15 && row == 29)
-                turnLeft();
-            if (column == 15 && row == 26)
-                turnRight();
-            if (column == 13 && row == 26)
-                turnLeft();
-            if (column == 13 && row == 23)
-                turnRight();
-            if (column == 11 && row == 23)
-                turnLeft();
-            if (column == 11 && row == 14)
-                turnRight();
-            if (column == 7 && row == 14)
-                turnRight();
-            if (column == 7 && row == 15)
-                turnLeft();
-            if (column == 2 && row == 15)
-                turnRight();
-            if (column == 2 && row == 17)
-                turnLeft();
-            if (column == 1 && row == 17)
-                turnLeft();
-            moveAndUpdateCoordinates();
+            synchronized (orderManager.map) {
+                if (isNextCellFree()) {
+                    if (column == 16 && row == 32)
+                        turnRight();
+                    if (column == 16 && row == 29)
+                        turnRight();
+                    if (column == 15 && row == 29)
+                        turnLeft();
+                    if (column == 15 && row == 26)
+                        turnRight();
+                    if (column == 13 && row == 26)
+                        turnLeft();
+                    if (column == 13 && row == 23)
+                        turnRight();
+                    if (column == 11 && row == 23)
+                        turnLeft();
+                    if (column == 11 && row == 14)
+                        turnRight();
+                    if (column == 7 && row == 14)
+                        turnRight();
+                    if (column == 7 && row == 15)
+                        turnLeft();
+                    if (column == 2 && row == 15)
+                        turnRight();
+                    if (column == 2 && row == 17)
+                        turnLeft();
+                    if (column == 1 && row == 17)
+                        turnLeft();
+                    moveAndUpdateCoordinates();
+                } else {
+                    waitIfBlocked();
+                }
+            }
         }
-        System.out.println("Train ready at " + route + ". Waiting for others...");
     }
 
     public void SanjavierToSanAntonio() {
