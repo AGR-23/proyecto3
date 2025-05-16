@@ -50,6 +50,7 @@ public class Order implements Directions {
         for (int i = 0; i < 29; i++) { // Loop for i from 0 to 28
             if (i < 3) {
                 colors[i] = Color.BLUE; // These are initially blue
+                // Trenes 0 y 1 van a La Estrella, tren 2 a Niquía
             } else if ((i - 3) % 3 == 0 && tempLineBCount < 10) {
                 colors[i] = Color.GREEN;
                 routes[i] = "routeSJ"; // Green trains go to San Javier
@@ -164,7 +165,7 @@ public class Order implements Directions {
             new Thread(() -> {
                 while (!allTrainsInStation(batchToCheck)) {
                     try {
-                        Thread.sleep(200); // Espera y verifica
+                        Thread.sleep(50); // Espera y verifica
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         System.err.println("Hilo de espera de lote interrumpido.");
@@ -273,6 +274,10 @@ public class Order implements Directions {
                 }
 
                 if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 11) {
+                    trainProgressedEnough = true;
+                }
+
+                if (!trainProgressedEnough && t.getColumn() == 14 && t.getRow() == 11) {
                     trainProgressedEnough = true;
                 }
             }

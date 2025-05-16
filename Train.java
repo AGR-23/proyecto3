@@ -163,7 +163,7 @@ public class Train extends Robot implements Runnable, Directions {
                         System.out.println(
                                 "Tren " + getID() + " esperando: celda ocupada en (" + nextRow + "," + nextCol + ")");
                         try {
-                            Thread.sleep(100); // Espera más corta para reintentar
+                            Thread.sleep(10); // Espera más corta para reintentar
                         } catch (InterruptedException e) {
                         }
                     }
@@ -176,7 +176,7 @@ public class Train extends Robot implements Runnable, Directions {
                     } else if (column == 1 && row == 34 && facingSouth()) {
                         turnLeft();
                     } else if (column == 14 && row == 34 && facingEast()) {
-                        turnLeft();
+                        turnRight();
                     } else if (column == 14 && row == 32 && facingSouth()) {
                         turnLeft();
                     } else {
@@ -205,7 +205,7 @@ public class Train extends Robot implements Runnable, Directions {
 
     private void waitForClearPath() {
         try {
-            Thread.sleep(500); // Reintentar cada 0.5 segundos
+            Thread.sleep(50); // Reintentar cada 0.5 segundos
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -357,7 +357,7 @@ public class Train extends Robot implements Runnable, Directions {
 
     private void waitIfBlocked() {
         try {
-            Thread.sleep(50); // Esperar antes de reintentar
+            Thread.sleep(5); // Esperar antes de reintentar
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
