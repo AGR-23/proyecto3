@@ -3,7 +3,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
-
 import kareltherobot.*;
 import java.awt.Color;
 
@@ -43,12 +42,20 @@ public class Order implements Directions {
         colors[29] = Color.GREEN;
         routes[29] = "routeSJ";
 
+        // Assign routes/colors for i= 0, 1, 2 explicitly
+        colors[0] = Color.GREEN;
+        routes[0] = "routeSJ";
+        colors[1] = Color.BLUE;
+        routes[1] = "routeAE";
+        colors[2] = Color.BLUE;
+        routes[2] = "routeAE";
+
         List<Integer> blueTrainCandidateIndices_0_to_28 = new ArrayList<>();
         int tempLineBCount = 0; // Simulates lineBTrains.size() for decision making for i=0..28
 
         // Determine colors for trains i=0 to 28 and identify blue train candidates
-        for (int i = 0; i < 29; i++) { // Loop for i from 0 to 28
-            if (i < 3) {
+        for (int i = 3; i < 29; i++) { // Loop for i from 0 to 28
+            if (i < 6) {
                 colors[i] = Color.BLUE; // These are initially blue
                 // Trenes 0 y 1 van a La Estrella, tren 2 a Niquía
             } else if ((i - 3) % 3 == 0 && tempLineBCount < 10) {
@@ -217,6 +224,7 @@ public class Order implements Directions {
 
             // Trenes en la estrella -> 16
             if (!trainProgressedEnough && t.getRoute().equals("routeAE")) {
+                
                 if (!trainProgressedEnough && t.getColumn() == 10 && t.getRow() == 2) {
                     trainProgressedEnough = true;
                 }
@@ -250,10 +258,6 @@ public class Order implements Directions {
                 }
 
                 if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 6) {
-                    trainProgressedEnough = true;
-                }
-
-                if (!trainProgressedEnough && t.getColumn() == 13 && t.getRow() == 7) {
                     trainProgressedEnough = true;
                 }
 
@@ -316,8 +320,8 @@ public class Order implements Directions {
                     trainProgressedEnough = true;
                 }
 
-                if (!trainProgressedEnough) {
-                    return false;
+                if (!trainProgressedEnough && t.getColumn() == 7 && t.getRow() == 15) {
+                    trainProgressedEnough = true;
                 }
             }
         }

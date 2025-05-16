@@ -52,6 +52,7 @@ public class Train extends Robot implements Runnable, Directions {
     @Override
     public void run() {
         exitDepot(); // 1. Salir del taller
+        
         goToStation(); // 2. Ir a la estación inicial asignada
 
         // 3. Esperar a que TODOS los trenes lleguen a sus estaciones
