@@ -176,7 +176,7 @@ public class Train extends Robot implements Runnable, Directions {
                     } else if (column == 1 && row == 34 && facingSouth()) {
                         turnLeft();
                     } else if (column == 14 && row == 34 && facingEast()) {
-                        turnRight();
+                        turnLeft();
                     } else if (column == 14 && row == 32 && facingSouth()) {
                         turnLeft();
                     } else {
@@ -287,25 +287,50 @@ public class Train extends Robot implements Runnable, Directions {
     }
 
     public void goToAN() {
-        while (column != 19 && row != 35) // while the train is not in Niquia
-        {
+        while (column != 19 || row != 35) { // Corrected loop condition
             synchronized (orderManager.map) {
-                if (isNextCellFree()) {
-                    if (column == 17 && row == 32)
-                        turnLeft();
-                    if (column == 17 && row == 34)
-                        turnRight();
-                    if (column == 20 && row == 34)
-                        turnLeft();
-                    if (column == 20 && row == 35)
-                        turnLeft();
+                // Step 1: Decide and perform turns based on current location and orientation.
+                // It's crucial to check the current facing direction before turning,
+                // to ensure the turn is made only when arriving at the intersection
+                // from the expected direction.
+                if (column == 17 && row == 32 && facingEast()) {
+                    turnLeft(); // Now at (32,17) facing North
+                } else if (column == 17 && row == 34 && facingNorth()) {
+                    turnRight(); // Now at (34,17) facing East
+                } else if (column == 20 && row == 34 && facingEast()) {
+                    turnLeft(); // Now at (34,20) facing North
+                } else if (column == 20 && row == 35 && facingNorth()) {
+                    turnLeft(); // Now at (35,20) facing West
+                }
+                // Add any other necessary turns for the path.
 
+                // Step 2: After any necessary turns, check if the path in the NEW current
+                // direction is clear.
+                if (isNextCellFree()) {
                     moveAndUpdateCoordinates();
                 } else {
+                    // Path in the current (potentially new) direction is blocked
+                    // This could be another train, or map boundary if turn logic is imperfect.
+                    System.out.println("Train " + getID() + " at (" + row + "," + column + ") facing " +
+                            getCurrentDirectionString() + ". Next cell blocked. Waiting.");
                     waitIfBlocked();
                 }
             }
         }
+        System.out.println("Train " + getID() + " (" + route + ") arrived at Niquia: (" + row + "," + column + ")");
+    }
+
+    // Helper method to get current direction as string for logging (optional)
+    private String getCurrentDirectionString() {
+        if (facingNorth())
+            return "North";
+        if (facingSouth())
+            return "South";
+        if (facingEast())
+            return "East";
+        if (facingWest())
+            return "West";
+        return "Unknown";
     }
 
     private boolean isNextCellFree() {
