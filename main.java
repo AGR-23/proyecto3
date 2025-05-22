@@ -4,10 +4,15 @@ public class main {
     public static void main(String[] args) {
         World.readWorld("MetroMed.kwld");
         World.setVisible(true);
-        World.setDelay(3);
+        World.setDelay(7);
+        
+        // Deshabilitar mensajes y controles
+        World.showSpeedControl(false);
+        World.setTrace(false);
+        World.setDelay(7); // Mínimo delay posible
 
-        Order order = new Order();
-        // Lanza los trenes en paquetes de 3
-        order.startAllTrainsInBatches(3);
+        Order orderManager = new Order();
+        
+        orderManager.startSystem();
     }
 }

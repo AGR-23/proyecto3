@@ -1,552 +1,460 @@
-
 import kareltherobot.*;
 import java.awt.Color;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.*;
 
 public class Train extends Robot implements Runnable, Directions {
-
-    // Add a unique ID for each train
     private static int idCounter = 1;
     private int id;
-
-    public int getID() {
-        return id;
-    }
-
     public int row;
     public int column;
     public String route;
     Order orderManager;
-    boolean isInNiquia = false; // Flag to check if the train is in Niquia
-    private boolean isInitialTrain; // Indica si es uno de los 3 trenes iniciales
-    private final CyclicBarrier allTrainsAtStationsBarrier; // Nueva barrera
-
-    // Métodos para acceder a la posición actual (añadir getters)
-
-    public String getRoute() {
-        return this.route;
-    }
-
-    public int getRow() {
-        return this.row;
-    }
-
-    public int getColumn() {
-        return this.column;
-    }
+    private boolean isInitialTrain;
 
     public Train(int street, int avenue, Direction dir, int beeps, Color color,
-            String route, Order orderManager, CyclicBarrier allTrainsBarrier) {
+            String route, Order orderManager) {
         super(street, avenue, dir, beeps, color);
-        this.route = route;
-        this.orderManager = orderManager;
+        this.id = idCounter++;
         this.row = street;
         this.column = avenue;
-        this.allTrainsAtStationsBarrier = allTrainsBarrier; // Guardar la barrera
-        this.id = idCounter++;
+        this.route = route;
+        this.orderManager = orderManager;
         World.setupThread(this);
     }
 
     @Override
     public void run() {
-        exitDepot(); // 1. Salir del taller
+        exitDepot();
+        goToInitialStation();
+        
+        // Si es un tren inicial, esperar por el input
+        if (isInitialTrain) {
+            while (orderManager.waitingFor420) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        
+        while (!orderManager.isReturningToDepot) {
+            startCommercialRoute();
+        }
+        
+        // Cuando es 11:00, retornar al taller
+        returnToDepot();
+    }
 
-        goToStation(); // 2. Ir a la estación inicial asignada
+    private void exitDepot() {
+        while (column != 16 || row != 32) {
+            if (column == 15 && row == 35 && !facingWest()) turnLeft();
+            if (column == 1 && row == 35 && !facingSouth()) turnLeft();
+            if (column == 1 && row == 34 && !facingEast()) turnLeft();
+            if (column == 14 && row == 34 && !facingSouth()) turnRight();
+            if (column == 14 && row == 32 && !facingEast()) turnLeft();
+            moverActualizandoCoord();
+        }
+    }
 
-        // 3. Esperar a que TODOS los trenes lleguen a sus estaciones
+    private void moverActualizandoCoord() {
+        int filaAntes = row;
+        int columnaAntes = column;
+        int nuevaFila = row;
+        int nuevaColumna = column;
+
+        if (facingNorth()) nuevaFila++;
+        else if (facingSouth()) nuevaFila--;
+        else if (facingEast()) nuevaColumna++;
+        else if (facingWest()) nuevaColumna--;
+
+        // Verificar límites del mapa
+        if (nuevaFila < 0 || nuevaFila >= orderManager.map.length ||
+            nuevaColumna < 0 || nuevaColumna >= orderManager.map[0].length) {
+            return;
+        }
+
+        boolean needsIntersectionLock = isNearIntersection(nuevaFila, nuevaColumna);
+        boolean isSanAntonio = (nuevaFila == 14 && nuevaColumna == 15);
+        boolean leavingSanAntonio = (filaAntes == 14 && columnaAntes == 15);
+        
         try {
-            System.out.println("Tren " + getID() + " (" + route + ") en estación (" + row + "," + column
-                    + "). Esperando en barrera global...");
-            allTrainsAtStationsBarrier.await(); // Todos los trenes esperan aquí
+            if (needsIntersectionLock) {
+                orderManager.acquireIntersection();
+            }
+            
+            // Verificar si podemos movernos
+            if (orderManager.map[nuevaFila][nuevaColumna] == 0) {
+                orderManager.updateMap(filaAntes, columnaAntes, nuevaFila, nuevaColumna);
+                row = nuevaFila;
+                column = nuevaColumna;
+                move();
+                
+                // Si estamos saliendo de San Antonio, liberar el semáforo
+                if (leavingSanAntonio) {
+                    orderManager.releaseCisnerosToSanAntonio();
+                }
+            }
         } catch (InterruptedException e) {
-            System.err.println("Tren " + getID() + " interrumpido mientras esperaba en la barrera.");
-            Thread.currentThread().interrupt(); // Restablecer estado de interrupción
-            World.stop();
-            return;
-        } catch (BrokenBarrierException e) {
-            System.err.println("Barrera rota para el tren " + getID() + ". Posiblemente otro tren falló.");
-            World.stop();
-            return;
+            Thread.currentThread().interrupt();
+        } finally {
+            if (needsIntersectionLock) {
+                orderManager.releaseIntersection();
+            }
         }
 
-        // 4. Una vez la barrera se libera (todos los 32 trenes han llegado), iniciar
-        // ruta comercial.
-        System.out.println(
-                "Tren " + getID() + " (" + route + ") iniciando ruta comercial desde (" + row + "," + column + ").");
-        startCommercialRoute();
-    }
-
-    private void goToStation() {
-        switch (route) {
-            case "routeAN":
-                goToAN();
-                break;
-            case "routeAE":
-                goToAE();
-                break;
-            case "routeSJ":
-                goToSJ();
-                break;
-        }
-        System.out.println("Train " + this + " en posición: " + route);
-    }
-
-    private void startCommercialRoute() {
-        System.out.println("INICIANDO RUTA COMERCIAL: " + route);
-        while (true) {
-            switch (route) {
-                case "routeAN":
-                    niquiaToLaEstrella();
-                    route = "routeAE";
-                    break;
-                case "routeAE":
-                    laEstrellaToNiquia();
-                    route = "routeAN";
-                    break;
-                case "routeSJ":
-                    SanjavierToSanAntonio();
-                    route = "routeSA";
-                    break;
-                case "routeSA":
-                    SanAntonioToSanjavier();
-                    route = "routeSJ";
-                    break;
+        // Si no se pudo mover, esperar un tiempo mínimo
+        if (filaAntes == row && columnaAntes == column) {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
-    // turn right by doing three left turns
+    private boolean isNearIntersection(int fila, int columna) {
+        // Verificar si estamos en o cerca de la intersección crítica (16,32)
+        return (fila == 32 && columna == 16) || // La intersección misma
+               (fila == 32 && columna == 15) || // Celda antes
+               (fila == 32 && columna == 17) || // Celda después
+               (fila == 31 && columna == 16) || // Celda arriba
+               (fila == 33 && columna == 16);   // Celda abajo
+    }
+
+    private boolean isNearCisneros(int fila, int columna) {
+        // Verificar si estamos en la zona Cisneros-San Antonio
+        return (fila == 14 && columna == 14) || // Cisneros
+               (fila == 13 && columna == 14) || // San Antonio
+               (fila == 14 && columna == 13) || // Aproximación desde el oeste
+               (fila == 14 && columna == 15) || // Aproximación desde el este
+               (fila == 13 && columna == 13) || // Diagonal NO
+               (fila == 13 && columna == 15);   // Diagonal NE
+    }
+
+    private void goToInitialStation() {
+        switch (route) {
+            case "routeAN":
+                irAN();
+                break;
+            case "routeAE":
+                irAE();
+                break;
+            case "routeSJ":
+                irASJ();
+                break;
+        }
+    }
+
+    private void startCommercialRoute() {
+            switch (route) {
+                case "routeAN":
+                while (!orderManager.isReturningToDepot) {
+                    rutaAE();
+                    if (orderManager.isReturningToDepot) break;
+                    rutaAN();
+                }
+                if (orderManager.isReturningToDepot) {
+                    returnToDepot();
+                }
+                    break;
+                
+                case "routeAE":
+                while (!orderManager.isReturningToDepot) {
+                    rutaAN();
+                    if (orderManager.isReturningToDepot) break;
+                    rutaAE();
+                }
+                if (orderManager.isReturningToDepot) {
+                    returnToDepot();
+                }
+                    break;
+                
+                case "routeSJ":
+                while (!orderManager.isReturningToDepot) {
+                    rutaASA();
+                    if (orderManager.isReturningToDepot) break;
+                    rutaASJ();
+                }
+                if (orderManager.isReturningToDepot) {
+                    returnToDepot();
+                }
+                    break;
+        }
+    }
+
     public void turnRight() {
         turnLeft();
         turnLeft();
         turnLeft();
     }
 
-    public void goToInitialPosition() {
-        if (this.route.equals("routeAN")) {
-            System.out.println("1");
-            goToAN();
-        }
-        if (this.route.equals("routeAE")) {
-            System.out.println("2");
-            goToAE();
-        }
-        if (this.route.equals("routeSJ")) {
-            System.out.println("3");
-            goToSJ();
+    public void irAN() {
+        while (column != 19 || row != 35) {
+            if (column == 17 && row == 32 && !facingNorth()) turnLeft();
+            if (column == 17 && row == 34 && !facingEast()) turnRight();
+            if (column == 20 && row == 34 && !facingNorth()) turnLeft();
+            if (column == 20 && row == 35 && !facingWest()) turnLeft();
+            moverActualizandoCoord();
         }
     }
 
-    private void exitDepot() {
-        while (column != 16 || row != 32) {
-            synchronized (orderManager.map) {
-                if (frontIsClear()) {
-                    int nextRow = row;
-                    int nextCol = column;
-                    // Calcular la próxima celda basada en la dirección actual
-                    if (facingNorth()) {
-                        nextRow++;
-                    } else if (facingSouth()) {
-                        nextRow--;
-                    } else if (facingEast()) {
-                        nextCol++;
-                    } else if (facingWest()) {
-                        nextCol--;
-                    }
-
-                    // Verificar si la próxima celda está libre en el mapa
-                    if (orderManager.map[nextRow][nextCol] == 0) {
-                        moveAndUpdateCoordinates();
-                    } else {
-                        System.out.println(
-                                "Tren " + getID() + " esperando: celda ocupada en (" + nextRow + "," + nextCol + ")");
-                        try {
-                            Thread.sleep(0); // Espera más corta para reintentar
-                        } catch (InterruptedException e) {
-                        }
-                    }
-                } else {
-                    // Lógica de giro para paredes físicas
-                    if (column == 15 && row == 35 && facingNorth()) {
-                        turnLeft();
-                    } else if (column == 1 && row == 35 && facingWest()) {
-                        turnLeft();
-                    } else if (column == 1 && row == 34 && facingSouth()) {
-                        turnLeft();
-                    } else if (column == 14 && row == 34 && facingEast()) {
-                        turnRight();
-                    } else if (column == 14 && row == 32 && facingSouth()) {
-                        turnLeft();
-                    } else {
-                        turnRight();
-                    }
-                }
-            }
-        }
-        System.out.println("Tren " + this + " salió del taller");
-    }
-
-    private boolean canMoveSafely() {
-        // Verificar si la próxima celda está libre
-        int nextRow = row, nextCol = column;
-        if (facingNorth())
-            nextRow++;
-        else if (facingSouth())
-            nextRow--;
-        else if (facingEast())
-            nextCol++;
-        else if (facingWest())
-            nextCol--;
-
-        return orderManager.map[nextRow][nextCol] == 0;
-    }
-
-    private void moveAndUpdateCoordinates() {
-        synchronized (orderManager.map) { // Synchronize on the shared map resource
-            int prevInternalRow = this.row;
-            int prevInternalCol = this.column;
-
-            int nextInternalRow = this.row;
-            int nextInternalCol = this.column;
-
-            if (facingNorth())
-                nextInternalRow++;
-            else if (facingSouth())
-                nextInternalRow--;
-            else if (facingEast())
-                nextInternalCol++;
-            else if (facingWest())
-                nextInternalCol--;
-
-            // Check 1: Are the calculated next internal coordinates within bounds?
-            if (nextInternalRow >= 0 && nextInternalRow < orderManager.map.length &&
-                    nextInternalCol >= 0 && nextInternalCol < orderManager.map[0].length) {
-
-                // Check 2: Is the target cell in the shared map free (not occupied by another
-                // train)?
-                if (orderManager.map[nextInternalRow][nextInternalCol] == 0) {
-
-                    orderManager.map[prevInternalRow][prevInternalCol] = 0; // Vacate old spot in map
-
-                    // Update internal coordinates to the new position
-                    this.row = nextInternalRow;
-                    this.column = nextInternalCol;
-
-                    move(); // Execute the physical move (Karel)
-
-                    // Mark new spot in the map using the now-updated internal coordinates
-                    orderManager.map[this.row][this.column] = 1;
-
-                    System.out.println("Tren " + getID() + " movido a (" + this.row + "," + this.column +
-                            "). Actual Karel pos: (" + getRow() + "," + column + ")");
-                } else {
-                    // Target cell in map is occupied by another train.
-                    System.out.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
-                            ") - path to internal (" + nextInternalRow + "," + nextInternalCol +
-                            ") blocked by map (another train). Holding position.");
-                }
-            } else {
-                // Calculated next internal step is out of bounds. This indicates a flaw in
-                System.err.println("Tren " + getID() + " at internal (" + prevInternalRow + "," + prevInternalCol +
-                        ") - calculated next step internal (" + nextInternalRow + "," + nextInternalCol +
-                        ") is out of bounds. Pathing logic error. Holding position.");
-            }
+    public void irAE() {
+        while (column != 11 || row != 1) {
+            if (column == 16 && row == 32 && !facingSouth()) turnRight();
+            if (column == 16 && row == 29 && !facingWest()) turnRight();
+            if (column == 15 && row == 29 && !facingSouth()) turnLeft();
+            if (column == 15 && row == 26 && !facingWest()) turnRight();
+            if (column == 13 && row == 26 && !facingSouth()) turnLeft();
+            if (column == 13 && row == 23 && !facingWest()) turnRight();
+            if (column == 11 && row == 23 && !facingSouth()) turnLeft();
+            if (column == 11 && row == 18 && !facingEast()) turnLeft();
+            if (column == 16 && row == 18 && !facingSouth()) turnRight();
+            if (column == 16 && row == 11 && !facingWest()) turnRight();
+            if (column == 13 && row == 11 && !facingSouth()) turnLeft();
+            if (column == 13 && row == 5 && !facingWest()) turnRight();
+            if (column == 12 && row == 5 && !facingSouth()) turnLeft();
+            if (column == 12 && row == 2 && !facingWest()) turnRight();
+            if (column == 10 && row == 2 && !facingSouth()) turnLeft();
+            if (column == 10 && row == 1 && !facingEast()) turnLeft();
+            moverActualizandoCoord();
         }
     }
 
-    // All methods below are now inside the Train class
+    public void irASJ() {
+        while (column != 1 || row != 16) {
+            if (column == 16 && row == 32 && !facingSouth()) turnRight();
+            if (column == 16 && row == 29 && !facingWest()) turnRight();
+            if (column == 15 && row == 29 && !facingSouth()) turnLeft();
+            if (column == 15 && row == 26 && !facingWest()) turnRight();
+            if (column == 13 && row == 26 && !facingSouth()) turnLeft();
+            if (column == 13 && row == 23 && !facingWest()) turnRight();
+            if (column == 11 && row == 23 && !facingSouth()) turnLeft();
+            if (column == 11 && row == 14 && !facingWest()) turnRight();
+            if (column == 7 && row == 14 && !facingNorth()) turnRight();
+            if (column == 7 && row == 15 && !facingWest()) turnLeft();
+            if (column == 2 && row == 15 && !facingNorth()) turnRight();
+            if (column == 2 && row == 17 && !facingWest()) turnLeft();
+            if (column == 1 && row == 17 && !facingSouth()) turnLeft();
+            moverActualizandoCoord();
+        }
+    }
+
+    public void rutaAN() {
+        while (column != 19 || row != 35) {
+            waitStation();
+            if (column == 13 && row == 1 && !facingNorth()) turnLeft();
+            if (column == 13 && row == 4 && !facingEast()) turnRight();
+            if (column == 14 && row == 4 && !facingNorth()) turnLeft();
+            if (column == 14 && row == 10 && !facingEast()) turnRight();
+            if (column == 17 && row == 10 && !facingNorth()) turnLeft();
+            if (column == 17 && row == 19 && !facingWest()) turnLeft();
+            if (column == 12 && row == 19 && !facingNorth()) turnRight();
+            if (column == 12 && row == 22 && !facingEast()) turnRight();
+            if (column == 14 && row == 22 && !facingNorth()) turnLeft();
+            if (column == 14 && row == 25 && !facingEast()) turnRight();
+            if (column == 16 && row == 25 && !facingNorth()) turnLeft();
+            if (column == 16 && row == 28 && !facingEast()) turnRight();
+            if (column == 17 && row == 28 && !facingNorth()) turnLeft();
+            if (column == 17 && row == 34 && !facingEast()) turnRight();
+            if (column == 20 && row == 34 && !facingNorth()) turnLeft();
+            if (column == 20 && row == 35 && !facingWest()) turnLeft();
+            moverActualizandoCoord();
+        }
+    }
+
+    public void rutaAE() {
+        while (column != 11 || row != 1) {
+            waitStation();
+            if (column == 16 && row == 35 && !facingSouth()) turnLeft();
+            if (column == 16 && row == 29 && !facingWest()) turnRight();
+            if (column == 15 && row == 29 && !facingSouth()) turnLeft();
+            if (column == 15 && row == 26 && !facingWest()) turnRight();
+            if (column == 13 && row == 26 && !facingSouth()) turnLeft();
+            if (column == 13 && row == 23 && !facingWest()) turnRight();
+            if (column == 11 && row == 23 && !facingSouth()) turnLeft();
+            if (column == 11 && row == 18 && !facingEast()) turnLeft();
+            if (column == 16 && row == 18 && !facingSouth()) turnRight();
+            if (column == 16 && row == 11 && !facingWest()) turnRight();
+            if (column == 13 && row == 11 && !facingSouth()) turnLeft();
+            if (column == 13 && row == 5 && !facingWest()) turnRight();
+            if (column == 12 && row == 5 && !facingSouth()) turnLeft();
+            if (column == 12 && row == 2 && !facingWest()) turnRight();
+            if (column == 10 && row == 2 && !facingSouth()) turnLeft();
+            if (column == 10 && row == 1 && !facingEast()) turnLeft();
+            moverActualizandoCoord();
+        }
+    }
+
+    public void rutaASA() {
+        while (column != 15 || row != 14) {
+            waitStation();
+            if (column == 1 && row == 14 && !facingEast()) turnLeft();
+            if (column == 6 && row == 14 && !facingSouth()) turnRight();
+            if (column == 6 && row == 13 && !facingEast()) turnLeft();
+            if (column == 14 && row == 13 && !facingNorth()) turnLeft();
+            if (column == 14 && row == 14 && !facingEast()) turnRight();
+            moverActualizandoCoord();
+        }
+        turnLeft();
+        turnLeft();
+    }
+
+    public void rutaASJ() {
+        while (column != 1 || row != 16) {
+            waitStation();
+            if (column == 7 && row == 14 && !facingNorth()) turnRight();
+            if (column == 7 && row == 15 && !facingWest()) turnLeft();
+            if (column == 2 && row == 15 && !facingNorth()) turnRight();
+            if (column == 2 && row == 17 && !facingWest()) turnLeft();
+            if (column == 1 && row == 17 && !facingSouth()) turnLeft();
+            moverActualizandoCoord();
+        }
+    }
 
     public void waitStation() {
         if (nextToABeeper()) {
-            System.out.println("Waiting at station: " + row + ", " + column);
             try {
-                Thread.sleep(3000); // wait for 3 seconds
+                // Si estamos en Cisneros (fila 13, columna 12), esperar y verificar San Antonio
+                if (row == 13 && column == 12) {
+                    Thread.sleep(2000); // Espera normal en la estación
+                    
+                    // Si es hora de retornar y estamos en una estación terminal, iniciar retorno
+                    if (orderManager.isReturningToDepot) {
+                        returnToDepot();
+                        return;
+                    }
+                    
+                    // Esperar a que San Antonio esté libre
+                    while (orderManager.map[14][15] == 1) {
+                        Thread.sleep(100);
+                    }
+                    
+                    // Adquirir el semáforo solo cuando San Antonio esté libre
+                    orderManager.acquireCisnerosToSanAntonio();
+                } else {
+                    Thread.sleep(2000);
+                    
+                    // Si es hora de retornar y estamos en una estación terminal, iniciar retorno
+                    int[] niquiaCoords = orderManager.getNiquiaCoords();
+                    int[] estrellaCoords = orderManager.getEstrellaCoords();
+                    
+                    if (orderManager.isReturningToDepot && 
+                        ((row == niquiaCoords[0] && column == niquiaCoords[1]) ||
+                         (row == estrellaCoords[0] && column == estrellaCoords[1]) ||
+                         (row == orderManager.SAN_ANTONIO_COORDS[0] && column == orderManager.SAN_ANTONIO_COORDS[1]))) {
+                        returnToDepot();
+                        return;
+                    }
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-
     }
 
-    public void goToAN() {
-        while (column != 19 || row != 35) { // Corrected loop condition
-            synchronized (orderManager.map) {
-                if (column == 17 && row == 32 && facingEast()) {
-                    turnLeft(); // Now at (32,17) facing North
-                } else if (column == 17 && row == 34 && facingNorth()) {
-                    turnRight(); // Now at (34,17) facing East
-                } else if (column == 20 && row == 34 && facingEast()) {
-                    turnLeft(); // Now at (34,20) facing North
-                } else if (column == 20 && row == 35 && facingNorth()) {
-                    turnLeft(); // Now at (35,20) facing West
-                }
+    public void setInitialTrain(boolean isInitial) {
+        this.isInitialTrain = isInitial;
+    }
 
-                // Step 2: After any necessary turns, check if the path in the NEW current
-                // direction is clear.
-                if (isNextCellFree()) {
-                    moveAndUpdateCoordinates();
-                } else {
-                    // Path in the current (potentially new) direction is blocked
-                    // This could be another train, or map boundary if turn logic is imperfect.
-                    System.out.println("Train " + getID() + " at (" + row + "," + column + ") facing " +
-                            getCurrentDirectionString() + ". Next cell blocked. Waiting.");
-                    waitIfBlocked();
-                }
+    public String getRoute() {
+        return route;
+    }
+
+    public int getRow() {
+        return row;
+    }
+
+    public int getColumn() {
+        return column;
+    }
+
+    private void returnToDepot() {
+        if (route.startsWith("routeA")) {
+            // TODOS los trenes de línea A primero van a Niquía
+            if (row != orderManager.getNiquiaCoords()[0] || column != orderManager.getNiquiaCoords()[1]) {
+                rutaAN(); // Ir a Niquía sin importar la ruta original
             }
-        }
-        System.out.println("Train " + getID() + " (" + route + ") arrived at Niquia: (" + row + "," + column + ")");
-    }
-
-    // Helper method to get current direction as string for logging (optional)
-    private String getCurrentDirectionString() {
-        if (facingNorth())
-            return "North";
-        if (facingSouth())
-            return "South";
-        if (facingEast())
-            return "East";
-        if (facingWest())
-            return "West";
-        return "Unknown";
-    }
-
-    private boolean isNextCellFree() {
-        int nextRow = row;
-        int nextCol = column;
-
-        if (facingNorth())
-            nextRow++;
-        else if (facingSouth())
-            nextRow--;
-        else if (facingEast())
-            nextCol++;
-        else if (facingWest())
-            nextCol--;
-
-        // Verificar que las coordenadas estén dentro del mapa
-        if (nextRow < 0 || nextRow >= orderManager.map.length ||
-                nextCol < 0 || nextCol >= orderManager.map[0].length) {
-            return false; // Fuera de los límites del mapa
-        }
-
-        return orderManager.map[nextRow][nextCol] == 0;
-    }
-
-    private void waitIfBlocked() {
-        try {
-            Thread.sleep(0); // Esperar antes de reintentar
+            // Una vez en Niquía, ir al taller
+            goBackN();
+        } else {
+            // Trenes de línea B
+            if (row != orderManager.getSanJavierCoords()[0] || column != orderManager.getSanJavierCoords()[1]) {
+                rutaASJ();
+            }
+            try {
+                Thread.sleep(1000); // Pequeña pausa para asegurar la llegada
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    public void niquiaToLaEstrella() {
-        while (column != 11 || row != 1) { // Mientras no esté en La Estrella
-            if (column == 16 && row == 35)
-                turnLeft();
-            if (column == 16 && row == 29)
-                turnRight();
-            if (column == 15 && row == 29)
-                turnLeft();
-            if (column == 15 && row == 26)
-                turnRight();
-            if (column == 13 && row == 26)
-                turnLeft();
-            if (column == 13 && row == 23)
-                turnRight();
-            if (column == 11 && row == 23)
-                turnLeft();
-            if (column == 11 && row == 18)
-                turnLeft();
-            if (column == 16 && row == 18)
-                turnRight();
-            if (column == 16 && row == 11)
-                turnRight();
-            if (column == 13 && row == 11)
-                turnLeft();
-            if (column == 13 && row == 5)
-                turnRight();
-            if (column == 12 && row == 5)
-                turnLeft();
-            if (column == 12 && row == 2)
-                turnRight();
-            if (column == 10 && row == 2)
-                turnLeft();
-            if (column == 10 && row == 1)
-                turnLeft();
-
-            moveAndUpdateCoordinates();
-            waitStation();
+            goBackS();
         }
-
+        
+        // Asegurarse de que el tren llegue al final del taller
+        enterDepot();
     }
-
-    public void goToAE() { // While the train is not in La estrella
-        while (column != 11 || row != 1) {
-            synchronized (orderManager.map) {
-                if (isNextCellFree()) {
-                    if (column == 16 && row == 32)
-                        turnRight();
-                    if (column == 16 && row == 29)
-                        turnRight();
-                    if (column == 15 && row == 29)
-                        turnLeft();
-                    if (column == 15 && row == 26)
-                        turnRight();
-                    if (column == 13 && row == 26)
-                        turnLeft();
-                    if (column == 13 && row == 23)
-                        turnRight();
-                    if (column == 11 && row == 23)
-                        turnLeft();
-                    if (column == 11 && row == 18)
-                        turnLeft();
-                    if (column == 16 && row == 18)
-                        turnRight();
-                    if (column == 16 && row == 11)
-                        turnRight();
-                    if (column == 13 && row == 11)
-                        turnLeft();
-                    if (column == 13 && row == 5)
-                        turnRight();
-                    if (column == 12 && row == 5)
-                        turnLeft();
-                    if (column == 12 && row == 2)
-                        turnRight();
-                    if (column == 10 && row == 2)
-                        turnLeft();
-                    if (column == 10 && row == 1)
-                        turnLeft();
-
-                    moveAndUpdateCoordinates();
-                } else {
-                    waitIfBlocked();
-                }
-            }
-        }
-
-    }
-
-    public void laEstrellaToNiquia() {
-        while (column != 19 || row != 35) // while the train is not in Niquia
-        {
-            if (column == 13 && row == 1)
-                turnLeft();
-            if (column == 13 && row == 4)
-                turnRight();
-            if (column == 14 && row == 4)
-                turnLeft();
-            if (column == 14 && row == 10)
-                turnRight();
-            if (column == 17 && row == 10)
-                turnLeft();
-            if (column == 17 && row == 19)
-                turnLeft();
-            if (column == 12 && row == 19)
-                turnRight();
-            if (column == 12 && row == 22)
-                turnRight();
-            if (column == 14 && row == 22)
-                turnLeft();
-            if (column == 14 && row == 25)
-                turnRight();
-            if (column == 16 && row == 25)
-                turnLeft();
-            if (column == 16 && row == 28)
-                turnRight();
-            if (column == 17 && row == 28)
-                turnLeft();
-            if (column == 17 && row == 34)
-                turnRight();
-            if (column == 20 && row == 34)
-                turnLeft();
-            if (column == 20 && row == 35)
-                turnLeft();
-
-            moveAndUpdateCoordinates();
-            waitStation();
-        }
-
-    }
-
-    public void goToSJ() // While the train is not in San Javier
-    {
-        while (column != 1 || row != 16) {
-            synchronized (orderManager.map) {
-                if (isNextCellFree()) {
-                    if (column == 16 && row == 32)
-                        turnRight();
-                    if (column == 16 && row == 29)
-                        turnRight();
-                    if (column == 15 && row == 29)
-                        turnLeft();
-                    if (column == 15 && row == 26)
-                        turnRight();
-                    if (column == 13 && row == 26)
-                        turnLeft();
-                    if (column == 13 && row == 23)
-                        turnRight();
-                    if (column == 11 && row == 23)
-                        turnLeft();
-                    if (column == 11 && row == 14)
-                        turnRight();
-                    if (column == 7 && row == 14)
-                        turnRight();
-                    if (column == 7 && row == 15)
-                        turnLeft();
-                    if (column == 2 && row == 15)
-                        turnRight();
-                    if (column == 2 && row == 17)
-                        turnLeft();
-                    if (column == 1 && row == 17)
-                        turnLeft();
-                    moveAndUpdateCoordinates();
-                } else {
-                    waitIfBlocked();
-                }
+    
+    private void enterDepot() {
+        // Coordenadas del taller (1,34) aprox
+        while (column != 1 || row != 34) {
+            if (column == 14 && row == 32 && !facingWest()) turnLeft();
+            if (column == 10 && row == 32 && !facingWest()) turnRight();
+            if (column == 3 && row == 32 && !facingSouth()) turnRight();
+            if (column == 3 && row == 34 && !facingWest()) turnRight();
+            moverActualizandoCoord();
+            
+            // Pausa para evitar bloqueos
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
-    public void SanjavierToSanAntonio() {
-        while (column != 15 || row != 14) {
-            if (column == 1 && row == 14)
-                turnLeft();
-            if (column == 6 && row == 14)
-                turnRight();
-            if (column == 6 && row == 13)
-                turnLeft();
-            if (column == 14 && row == 13)
-                turnLeft();
-            if (column == 14 && row == 14)
-                turnRight();
-
-            moveAndUpdateCoordinates();
-            waitStation();
+    private void goBackN() { // Desde la posición Niquía
+        int count = 0;
+        // Ir al punto de intersección (14,32)
+        while ((column != 14 || row != 32) && count < 100) {
+            if (column == 19 && row == 35 && !facingWest()) turnLeft();
+            if (column == 17 && row == 35 && !facingSouth()) turnLeft();
+            if (column == 17 && row == 34 && !facingWest()) turnRight();
+            if (column == 15 && row == 34 && !facingSouth()) turnLeft();
+            if (column == 15 && row == 32 && !facingWest()) turnRight();
+            moverActualizandoCoord();
+            count++;
+            
+            // Breve pausa para control
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
-        if (column == 15 && row == 14) // If the train is in San Antonio, turn left to go to the station
-            turnLeft();
-        turnLeft(); // Turn left to face the station
     }
 
-    public void SanAntonioToSanjavier() {
-        while (column != 1 || row != 16) {
-            if (column == 7 && row == 14)
-                turnRight();
-            if (column == 7 && row == 15)
-                turnLeft();
-            if (column == 2 && row == 15)
-                turnRight();
-            if (column == 2 && row == 17)
-                turnLeft();
-            if (column == 1 && row == 17)
-                turnLeft();
-
-            moveAndUpdateCoordinates();
-            waitStation();
+    private void goBackS() { // Desde la posición San Javier
+        int count = 0;
+        // Ir al punto de intersección (14,32)
+        while ((column != 14 || row != 32) && count < 100) {
+            if (column == 1 && row == 16 && !facingEast()) turnLeft();
+            if (column == 6 && row == 16 && !facingNorth()) turnRight();
+            if (column == 6 && row == 17 && !facingEast()) turnLeft();
+            if (column == 11 && row == 17 && !facingNorth()) turnLeft();
+            if (column == 11 && row == 23 && !facingEast()) turnRight();
+            if (column == 13 && row == 23 && !facingNorth()) turnLeft();
+            if (column == 13 && row == 26 && !facingEast()) turnRight();
+            if (column == 15 && row == 26 && !facingNorth()) turnLeft();
+            if (column == 15 && row == 32 && !facingWest()) turnRight();
+            moverActualizandoCoord();
+            count++;
+            
+            // Breve pausa para control
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }
