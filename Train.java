@@ -257,6 +257,7 @@ public class Train extends Robot implements Runnable, Directions {
 
     public void irASJ() {
         while (column != 1 || row != 16) {
+            waitStation();
             if (column == 16 && row == 32 && !facingSouth())
                 turnRight();
             if (column == 16 && row == 29 && !facingWest())
@@ -469,9 +470,9 @@ public class Train extends Robot implements Runnable, Directions {
 
     private void returnToDepot() {
         try {
-            // Si es un tren de la línea B (verde), esperar 5 segundos
+            // Si es un tren de la línea B (verde), esperar 9 segundos
             if (route.equals("routeSJ")) {
-                Thread.sleep(7000); // 10 segundos de espera
+                Thread.sleep(9000); //9 segundos de espera
             }
 
             // Determinar desde qué estación estamos retornando
@@ -484,9 +485,6 @@ public class Train extends Robot implements Runnable, Directions {
                 returnFromSanJavier(); // Luego retornar desde San Antonio
             }
         
-
-            // Notificar que este tren ha retornado
-            orderManager.trainReturned(route.equals("routeAN") || route.equals("routeAE"));
 
             // Detener la ejecución del tren
             Thread.currentThread().interrupt();
@@ -567,6 +565,8 @@ public class Train extends Robot implements Runnable, Directions {
                 turnRight();
             if (column == 14 && row == 32 && !facingEast())
                 turnLeft();
+            // si llega al taller dormir
+            
             moverActualizandoCoord();
         }
 
