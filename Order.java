@@ -25,6 +25,11 @@ public class Order implements Directions {
     private final Semaphore lineBExitSemaphore = new Semaphore(1); // Para (18,11)
     private final Semaphore lineATallerSemaphore = new Semaphore(1); // Para (19,12)
 
+    // Nuevo semáforo para el retorno al taller
+    private final Semaphore depotEntranceSemaphore = new Semaphore(1); // Permite solo 1 tren a la vez
+    private final Object depotLock = new Object();
+    private volatile boolean trainEntering = false;
+
     // Coordenadas de estaciones iniciales
     private final int[] NIQUIA_COORDS = {35, 19};
     private final int[] ESTRELLA_COORDS = {16, 1};
@@ -36,6 +41,7 @@ public class Order implements Directions {
     public final int[] SAN_ANTONIO_COORDS = {14, 15};
     public final int[] LINE_B_EXIT_COORDS = {18, 11}; // Nueva zona crítica
     public final int[] LINE_A_TALLER_COORDS = {19, 12}; // Nueva zona crítica
+    public final int[] DEPOT_ENTRANCE_COORDS = {14, 32}; // Punto de entrada al taller
 
     public Order() {
         initializeTrains();
@@ -128,20 +134,17 @@ public class Order implements Directions {
             // Esperar el input de las 11:00
             System.out.println("\n==================================");
             System.out.println("SISTEMA EN OPERACIÓN");
-            System.out.println("Ingresa '11:00' para retornar al taller");
+            System.out.println("Ingresa '11:00' o '11' para retornar al taller");
             System.out.println("==================================\n");
             
             String hora11 = input.nextLine();
-            if (hora11.equals("11:00")) {
+            if (hora11.equals("11:00")|| hora11.equals("11")) {
                 System.out.println("\n==================================");
                 System.out.println("¡ATENCIÓN! RETORNO AL TALLER INICIADO");
                 System.out.println("==================================\n");
                 isReturningToDepot = true;
             }
             
-        } else if (hora.equals("11:00")) {
-            System.out.println("¡Retornando todos los trenes al taller!");
-            isReturningToDepot = true;
         } else {
             System.out.println("Hora no válida. El programa se cerrará.");
             System.exit(0);
@@ -180,6 +183,31 @@ public class Order implements Directions {
         lineATallerSemaphore.release();
     }
 
+    public void acquireDepotEntrance() throws InterruptedException {
+        synchronized(depotLock) {
+            while (trainEntering) {
+                depotLock.wait();
+            }
+            trainEntering = true;
+            depotEntranceSemaphore.acquire();
+        }
+    }
+
+    public void releaseDepotEntrance() {
+        synchronized(depotLock) {
+            depotEntranceSemaphore.release();
+            trainEntering = false;
+            depotLock.notifyAll();
+            
+            // Esperar un tiempo antes de permitir que entre el siguiente tren
+            try {
+                Thread.sleep(2000); // 2 segundos de espera entre trenes
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
     public synchronized void updateMap(int oldRow, int oldCol, int newRow, int newCol) {
         map[oldRow][oldCol] = 0;
         map[newRow][newCol] = 1;
@@ -197,4 +225,6 @@ public class Order implements Directions {
     public int[] getSanJavierCoords() {
         return SANJAVIER_COORDS;
     }
+
+
 }
